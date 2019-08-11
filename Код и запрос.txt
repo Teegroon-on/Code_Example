@@ -1,0 +1,274 @@
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Data;
+using System.Drawing;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+using MySql.Data.MySqlClient;
+using System.IO;
+
+namespace Carsharing
+{
+    public partial class AuthorazationForm : Form
+    {
+        MySqlConnection Connect = new MySqlConnection("server=192.168.0.12; userid = admin; password = 1234; database= leon; port =3306; persistsecurityinfo=true");
+        int VhodCount = 0;
+        List<string[]> SaveAccountS = new List<string[]>();
+        string text = String.Empty;
+
+        public AuthorazationForm()
+        {
+            InitializeComponent();
+            pictureBoxCapcha.Visible = false;
+            textBoxCapcha.Visible = false;
+            pictureBoxCapcha.Enabled = false;
+            textBoxCapcha.Enabled = false;
+            StreamReader ReadFile = new StreamReader(Directory.GetCurrentDirectory() + @"\Save.txt");
+            string data = ReadFile.ReadToEnd();
+            ReadFile.Close();
+            while (true)
+            {
+                if (data.IndexOf(" ") != -1)
+                {
+                    SaveAccountS.Add(new string[2]);
+                    SaveAccountS[SaveAccountS.Count - 1][0] = data.Substring(0, data.IndexOf(" "));
+                    SaveAccountS[SaveAccountS.Count - 1][1] = data.Substring(data.IndexOf(" ") + 1, data.IndexOf("*") - data.IndexOf(" ") - 1);
+                    data = data.Substring(data.IndexOf("*") + 1);
+                }
+                else
+                {
+                    break;
+                }
+            }
+
+            this.KeyPreview = true;
+            this.KeyUp += new System.Windows.Forms.KeyEventHandler(this.Form_Auth_KeyUp);
+        }
+
+        private void buttonExit_Click(object sender, EventArgs e)
+        {
+            Application.Exit();
+        }
+
+        private void buttonEntry_Click(object sender, EventArgs e)
+        {
+            if (textBoxLogin.Text != "" && textBoxPassword.Text != "" &&
+                textBoxLogin.Text != " " && textBoxPassword.Text != " ")
+            {
+                string pass = "", role = "";
+                if (VhodCount <= 3)
+                {
+
+                    MySqlCommand Cmd = new MySqlCommand("SELECT * FROM user where login='" + textBoxLogin.Text.ToLower() + "';", Connect);
+                    try
+                    {
+                        Connect.Open();
+                        MySqlDataReader Data = Cmd.ExecuteReader();
+                        if (Data.Read())
+                        {
+                            pass = Data[1].ToString();
+                            role = Data[2].ToString();
+
+                        }
+                        else
+                        {
+                            MessageBox.Show("Пользователя с таким логином не существует!", 
+                                "Ошибка!", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show("Ошибка базы данных!!!" + ex.ToString(), "Ошибка!",
+                            MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+                    finally { Connect.Close(); }
+                }
+                else
+                {
+                    if (textBoxCapcha.Text == text)
+                    {
+
+                        MySqlCommand Cmd = new MySqlCommand("SELECT * FROM user where login='" + textBoxLogin.Text + "';", Connect);
+                        try
+                        {
+                            Connect.Open();
+                            MySqlDataReader Data = Cmd.ExecuteReader();
+                            if (Data.Read())
+                            {
+                                pass = Data[1].ToString();
+                                role = Data[2].ToString();
+
+                            }
+                            else
+                            {
+                                MessageBox.Show("Пользователя с таким логином не существует!",
+                                    "Ошибка!", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            MessageBox.Show("Ошибка базы данных!!!" + ex.ToString(), "Ошибка!",
+                                MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        }
+                        finally { Connect.Close(); }
+                    }
+                    else
+                    {
+                        MessageBox.Show("Код капчи не верен!!!", "",
+                            MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+                }
+                VhodCount++;
+                if (VhodCount > 3)
+                {
+                    pictureBoxCapcha.Visible = true;
+                    textBoxCapcha.Visible = true;
+                    pictureBoxCapcha.Enabled = true;
+                    textBoxCapcha.Enabled = true;
+                    pictureBoxCapcha.Image = CreateImage(266, 94);
+                }
+                if (textBoxPassword.Text.Equals(pass))
+                {
+                    if (checkBoxSave.Checked)
+                    {
+                        using (StreamWriter WriteFile = new StreamWriter(Directory.GetCurrentDirectory() + @"\Save.txt", true, System.Text.Encoding.Default))
+                        {
+                            WriteFile.Write(textBoxLogin.Text + " ");
+                            WriteFile.Write(textBoxPassword.Text + "*");
+                        }
+
+                    }
+                    switch (role)
+                    {
+                        case "Администратор":
+                            {
+                                AdministrationForm AF = new AdministrationForm();
+                                AF.Show();
+                                this.Hide();
+                                VhodCount = 0;
+                                break;
+                            }
+                        case "Диспетчер":
+                            {
+                                DispetherForm DF = new DispetherForm();
+                                DF.Show();
+                                this.Hide();
+                                VhodCount = 0;
+                                break;
+                            }
+                        case "Тех. обслуживание":
+                            {
+                                TechServiceForm TSF = new TechServiceForm();
+                                TSF.Show();
+                                this.Hide();
+                                VhodCount = 0;
+                                break;
+                            }
+                        case "Клиент":
+                            {
+                                ClientsForm CF = new ClientsForm(textBoxLogin.Text);
+                                CF.Show();
+                                this.Hide();
+                                VhodCount = 0;
+                                break;
+                            }
+                            
+                    }
+
+                }
+                else
+                {
+                    MessageBox.Show("Пароль не верен!", "",
+                        MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+            else
+            {
+                MessageBox.Show("Данные не заполнены!!!", "",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void textBoxLogin_TextChanged(object sender, EventArgs e)
+        {
+            for (int i = 0; i < SaveAccountS.Count; i++)
+            {
+                if (textBoxLogin.Text.Equals(SaveAccountS[i][0]))
+                {
+                    textBoxPassword.Text = SaveAccountS[i][1];
+                }
+            }
+        }
+
+        private void buttonRegistration_Click(object sender, EventArgs e)
+        {
+            RegistrationForm RF = new RegistrationForm();
+            RF.Show();
+            this.Hide();
+        }
+
+        private Bitmap CreateImage(int Width, int Height)
+        {
+            Random rnd = new Random();
+
+            Bitmap result = new Bitmap(Width, Height);
+
+            int Xpos = rnd.Next(0, Width - 100);
+            int Ypos = rnd.Next(15, Height - 15);
+
+            Brush[] colors = { Brushes.Black,
+                     Brushes.Red,
+                     Brushes.RoyalBlue,
+                     Brushes.Green };
+
+            Graphics g = Graphics.FromImage((Image)result);
+
+            g.Clear(Color.Gray);
+
+            text = String.Empty;
+            string ALF = "1234567890QWERTYUIOPASDFGHJKLZXCVBNM";
+            for (int i = 0; i < 5; ++i)
+                text += ALF[rnd.Next(ALF.Length)];
+
+            g.DrawString(text,
+                         new Font("Arial", 32),
+                         colors[rnd.Next(colors.Length)],
+                         new PointF(Xpos, Ypos));
+
+            g.DrawLine(Pens.Black,
+                       new Point(0, 0),
+                       new Point(Width - 20, Height - 10));
+            g.DrawLine(Pens.Black,
+                       new Point(0, Height - 10),
+                       new Point(Width - 20, 0));
+            for (int i = 0; i < Width; ++i)
+            {
+                for (int j = 0; j < Height; ++j)
+                {
+                    if (rnd.Next() % 20 == 0)
+                    {
+                        result.SetPixel(i, j, Color.White);
+                    }
+                }
+            }
+
+            return result;
+        }
+
+        private void Form_Auth_KeyUp(object sender, KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.Enter) buttonEntry.PerformClick();
+        }
+    }
+}
+
+
+
+
+
+
+
+//SELECT product.Name, product.Category FROM product left join category on product.Category=category.Name;
